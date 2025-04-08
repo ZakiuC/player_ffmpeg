@@ -1,20 +1,26 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include <QMessageBox>
+#include <QDebug>
+
+#include <nlohmann/json.hpp>
+#include <mqtt/async_client.h>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
 
+    // 初始化MQTT客户端
+    m_mqttClient = new MQTTClient(config);
+    // 初始化视频解码器
+    m_decoder = new VideoDecoder(config);
+
     // 从 UI 中获取视频显示区域组件，用于显示解码后的视频帧
     m_videoWidget = ui->showArea;
 
     // 设置窗口标题
     setWindowTitle("RTMP Player");
-
-    // 初始化视频解码器
-    m_decoder = new VideoDecoder(this, "rtmp://111.231.8.200:9090/live/test");
 
     // 连接解码器的 frameReady 信号到 updateVideoFrame 槽函数，
     // 当解码器解码出一帧图像时更新视频显示
@@ -24,8 +30,8 @@ MainWindow::MainWindow(QWidget *parent)
     // 当解码过程中发生错误时提示用户
     connect(m_decoder, &VideoDecoder::errorOccurred, this, &MainWindow::handleError);
 
-    // 启动视频解码线程，开始实时解码视频流
-    m_decoder->start();
+    connect(m_mqttClient, &MQTTClient::errorOccurred, this, [this](const QString &msg)
+            { QMessageBox::critical(this, "MQTT Error", msg); });
 }
 
 MainWindow::~MainWindow()
@@ -52,4 +58,35 @@ void MainWindow::handleError(const QString &message)
     QMessageBox::critical(this, "Playback Error", message);
     // 出现错误后停止视频解码线程
     m_decoder->stop();
+}
+
+void MainWindow::on_play8pauseBtn_clicked()
+{
+    nlohmann::json params;
+    params["gyro_roll"]["value"] = 1;
+    params["gyro_pitch"]["value"] = 2;
+    params["gyro_yaw"]["value"] = 3;
+
+    // 发布消息
+    m_mqttClient->publish(config.TOPIC, params, "thing.event.property.post");
+
+    qDebug() << "[MAINWINDOW] Clicked [play8pause] button.";
+
+    // 启动视频解码线程，开始实时解码视频流
+    m_decoder->start();
+
+    qDebug() << "[MAINWINDOW] start play.";
+}
+
+void MainWindow::on_stopBtn_clicked()
+{
+    nlohmann::json params;
+    params["gyro_roll"]["value"] = 3;
+    params["gyro_pitch"]["value"] = 1;
+    params["gyro_yaw"]["value"] = 2;
+
+    // 发布消息
+    m_mqttClient->publish(config.TOPIC, params, "thing.event.property.post");
+
+    qDebug() << "[MAINWINDOW] Clicked [stop] button.";
 }

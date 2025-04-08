@@ -6,8 +6,8 @@ extern "C"
 #include <libavutil/imgutils.h>
 }
 
-VideoDecoder::VideoDecoder(QObject *parent, const QString &url)
-    : QThread(parent), m_url(url)
+VideoDecoder::VideoDecoder(const AppConfig &cfg, QObject *parent)
+    : QThread(parent), m_config(cfg)
 {
     // 初始化 FFmpeg 网络模块，支持网络协议
     avformat_network_init();
@@ -47,7 +47,7 @@ void VideoDecoder::run()
     av_dict_set(&options, "probesize", "32", 0);       // 降低探测数据大小，加快启动速度
 
     // 打开视频流输入，使用指定的 URL 和参数
-    if (avformat_open_input(&m_formatCtx, m_url.toUtf8().constData(), nullptr, &options) < 0)
+    if (avformat_open_input(&m_formatCtx, m_config.RTMP_URL.toUtf8().constData(), nullptr, &options) < 0)
     {
         // 打开视频流失败，发送错误信号并退出线程
         emit errorOccurred("Failed to open stream");
