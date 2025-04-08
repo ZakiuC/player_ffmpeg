@@ -13,6 +13,7 @@ extern "C"
 #include <libavcodec/avcodec.h>
 #include <libswscale/swscale.h>
 }
+#include "config.h"
 
 /**
  * @brief 负责从视频流中解码视频帧，并通过信号传递给界面显示
@@ -23,10 +24,10 @@ class VideoDecoder : public QThread
 public:
     /**
      * @brief 构造函数，初始化成员变量，并设置默认的 URL
+     * @param cfg 配置对象，存储编码所需的配置信息
      * @param parent 父对象
-     * @param url 视频流地址
      */
-    explicit VideoDecoder(QObject *parent = nullptr, const QString &url = "");
+    explicit VideoDecoder(const AppConfig &cfg, QObject *parent = nullptr);
     ~VideoDecoder();
 
     /**
@@ -69,7 +70,9 @@ private:
      */
     bool initSwsContext();
 
-    QString m_url;          // 视频流地址
+    // 配置对象，存储编码所需的配置信息
+    AppConfig m_config;
+
     bool m_running = false; // 控制解码线程运行的标志
 
     // FFmpeg 相关成员变量，用于存储视频流、解码器及颜色转换上下文

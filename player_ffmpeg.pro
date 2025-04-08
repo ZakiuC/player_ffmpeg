@@ -23,15 +23,32 @@ LIBS += -L/opt/EmbedSky/TQ3588/toolchain/aarch64-buildroot-linux-gnu/sysroot/usr
 
 QMAKE_LFLAGS += -Wl,-rpath-link,/opt/EmbedSky/TQ3588/toolchain/aarch64-buildroot-linux-gnu/sysroot/usr/lib
 
+## 添加 Paho MQTT C/C++ 库的头文件目录
+#INCLUDEPATH += /opt/EmbedSky/TQ3588/toolchain/aarch64-buildroot-linux-gnu/sysroot/usr/local/include
+LIBS += -L/opt/EmbedSky/TQ3588/toolchain/aarch64-buildroot-linux-gnu/sysroot/usr/lib/gcc/aarch64-linux-gnu/11 \
+        -L/opt/EmbedSky/TQ3588/toolchain/aarch64-buildroot-linux-gnu/sysroot/usr/local/lib \
+        -lpaho-mqttpp3 -lpaho-mqtt3a
+
+message($$LIBS)
+message($$QMAKE_LFLAGS)
+
+## 添加 nlohmann/json 的头文件目录
+#INCLUDEPATH += /opt/EmbedSky/TQ3588/toolchain/aarch64-buildroot-linux-gnu/sysroot/usr/include
+
+QMAKE_LFLAGS += -Wl,-rpath,/opt/EmbedSky/TQ3588/toolchain/aarch64-buildroot-linux-gnu/sysroot/usr/lib
+
 
 SOURCES += \
     main.cpp \
     mainwindow.cpp \
+    mqtt_client.cpp \
     video_decoder.cpp \
     videowidget.cpp
 
 HEADERS += \
+    config.h \
     mainwindow.h \
+    mqtt_client.h \
     video_decoder.h \
     videowidget.h
 
