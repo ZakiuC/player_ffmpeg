@@ -14,14 +14,14 @@
    <string>MainWindow</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">background-color: rgb(255, 255, 255);</string>
+   <string notr="true">background-color: rgb(255, 170, 255);</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <widget class="VideoWidget" name="showArea" native="true">
+   <widget class="VideoWidget" name="videoArea" native="true">
     <property name="geometry">
      <rect>
-      <x>50</x>
-      <y>40</y>
+      <x>10</x>
+      <y>10</y>
       <width>960</width>
       <height>540</height>
      </rect>
@@ -36,72 +36,30 @@
      <string notr="true">background-color: rgb(0, 0, 0);</string>
     </property>
    </widget>
-   <widget class="QPushButton" name="play8pauseBtn">
+   <widget class="OperatingArea" name="operatingArea" native="true">
     <property name="geometry">
      <rect>
-      <x>1100</x>
-      <y>100</y>
-      <width>80</width>
-      <height>50</height>
+      <x>980</x>
+      <y>10</y>
+      <width>290</width>
+      <height>540</height>
      </rect>
     </property>
-    <property name="minimumSize">
-     <size>
-      <width>80</width>
-      <height>50</height>
-     </size>
-    </property>
-    <property name="maximumSize">
-     <size>
-      <width>80</width>
-      <height>50</height>
-     </size>
-    </property>
-    <property name="font">
-     <font>
-      <pointsize>14</pointsize>
-     </font>
-    </property>
     <property name="styleSheet">
-     <string notr="true">background-color: rgb(0, 170, 255);
-color: rgb(0, 0, 0);</string>
-    </property>
-    <property name="text">
-     <string>play</string>
+     <string notr="true">background-color: rgb(255, 255, 255);</string>
     </property>
    </widget>
-   <widget class="QPushButton" name="stopBtn">
+   <widget class="QWidget" name="showArea" native="true">
     <property name="geometry">
      <rect>
-      <x>1100</x>
-      <y>180</y>
-      <width>80</width>
-      <height>50</height>
+      <x>10</x>
+      <y>560</y>
+      <width>1260</width>
+      <height>230</height>
      </rect>
     </property>
-    <property name="minimumSize">
-     <size>
-      <width>80</width>
-      <height>50</height>
-     </size>
-    </property>
-    <property name="maximumSize">
-     <size>
-      <width>80</width>
-      <height>50</height>
-     </size>
-    </property>
-    <property name="font">
-     <font>
-      <pointsize>14</pointsize>
-     </font>
-    </property>
     <property name="styleSheet">
-     <string notr="true">background-color: rgb(0, 170, 255);
-color: rgb(0, 0, 0);</string>
-    </property>
-    <property name="text">
-     <string>stop</string>
+     <string notr="true">background-color: rgb(85, 170, 255);</string>
     </property>
    </widget>
   </widget>
@@ -122,6 +80,12 @@ color: rgb(0, 0, 0);</string>
    <class>VideoWidget</class>
    <extends>QWidget</extends>
    <header>videowidget.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>OperatingArea</class>
+   <extends>QWidget</extends>
+   <header location="global">operatingarea.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

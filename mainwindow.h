@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QPushButton>
 #include "video_decoder.h"
 #include "videowidget.h"
 #include "mqtt_client.h"
@@ -34,19 +35,28 @@ private slots:
      */
     void handleError(const QString &message);
 
-    /**
-     * @brief 播放/暂停按钮点击事件
-     */
-    void on_play8pauseBtn_clicked();
+    void handleMessageReceived(const QString &topic, const QByteArray &payload);
 
-    /**
-     * @brief 停止按钮点击事件
-     */
-    void on_stopBtn_clicked();
+    void toggleButtonState(bool &state, QPushButton *btn, const QString &textOn, const QString &textOff, const QString &styleOn, const QString &styleOff);
+    void connectButtons();
+
+    void onPlay8StopClicked();
+    void onUp8DownClicked();
+    void onForwardClicked();
+    void onBackwardClicked();
+    void onStopMovingClicked();
+    void onFanCtrlClicked();
+    void onGPSClicked();
+    void onOpenSelectedClicked();
+    void onCloseSelectedClicked();
+    void onOpen8CloseClicked();
 
 private:
     Ui::MainWindow *ui;
     AppConfig config;           // 应用配置
+    bool isPlaying;             // 视频是否正在播放
+    bool isDown;                // 毛刷是否在下面
+    bool isFanOpen;             // 推进器是否开启
     VideoDecoder *m_decoder;    // 视频解码器对象，负责从流中解码视频帧
     VideoWidget *m_videoWidget; // 视频显示组件，用于在界面上显示视频
     MQTTClient *m_mqttClient;   // mqtt

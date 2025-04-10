@@ -1,8 +1,7 @@
 #include "videowidget.h"
 #include <QPainter>
 
-VideoWidget::VideoWidget(QWidget *parent)
-    : QWidget(parent)
+VideoWidget::VideoWidget(QWidget *parent):QWidget(parent)
 {
     // 设置控件属性，启用不透明绘制以提高显示性能
     setAttribute(Qt::WA_OpaquePaintEvent);

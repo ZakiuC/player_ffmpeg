@@ -17,6 +17,7 @@ struct AppConfig
     const QString USERNAME = "test_aly&k1sbasnSsQz";                                                              // 用户名
     const QString PASSWORD = "fbe84b268f6a5ee565d4585768db801eb087f55fd703947f1ed6ad549bd31029";                  // 密码
     const QString TOPIC = "/sys/k1sbasnSsQz/test_aly/thing/event/property/post";                                  //
+    const QString subTOPIC = "/k1sbasnSsQz/test_aly/user/ackcheck";
 };
 
 #endif // CONFIG_H

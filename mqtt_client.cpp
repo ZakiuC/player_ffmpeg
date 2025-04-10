@@ -2,60 +2,172 @@
 #include <mqtt/async_client.h>
 #include <mqtt/exception.h>
 #include <QDebug>
+#include <QMetaObject>
 
 MQTTClient::MQTTClient(const AppConfig &cfg, QObject *parent)
-    : QObject(parent),
-      m_config(cfg)
+    : QObject(parent), m_config(cfg), m_client(new mqtt::async_client(m_config.SERVER_ADDRESS.toStdString(), m_config.CLIENT_ID.toStdString())),
+      m_callback(new MQTTClientCallback(this))
 {
+    m_client->set_callback(*m_callback);
+
+    m_connOpts.set_clean_session(true);
+    m_connOpts.set_automatic_reconnect(true);
+    m_connOpts.set_keep_alive_interval(60);
+    m_connOpts.set_user_name(m_config.USERNAME.toStdString());
+    m_connOpts.set_password(m_config.PASSWORD.toStdString());
+
+    connectToBroker();
 }
 
-void MQTTClient::publish(const QString &topic,
-                         const nlohmann::json &params,
-                         const QString &method,
-                         const QString &id,
-                         const QString &version)
+MQTTClient::~MQTTClient()
 {
     try
     {
-        // 1. 创建MQTT客户端
-        mqtt::async_client client(m_config.SERVER_ADDRESS.toStdString(), m_config.CLIENT_ID.toStdString());
+        if (m_client->is_connected())
+        {
+            m_client->disconnect()->wait();
+        }
+        delete m_client;
+        delete m_callback;
+    }
+    catch (const mqtt::exception &e)
+    {
+        qCritical() << "Error in destructor:" << e.what();
+    }
+}
 
-        // 2. 配置连接选项
-        mqtt::connect_options connOpts;
-        connOpts.set_clean_session(true);
-        connOpts.set_automatic_reconnect(true);
-        connOpts.set_keep_alive_interval(60);
-        connOpts.set_user_name(m_config.USERNAME.toStdString());
-        connOpts.set_password(m_config.PASSWORD.toStdString());
+void MQTTClient::connectToBroker()
+{
+    try
+    {
+        m_client->connect(m_connOpts)->wait();
+        qDebug() << "[MQTT] Connected to broker";
+    }
+    catch (const mqtt::exception &e)
+    {
+        qCritical() << "[MQTT] Connection failed:" << e.what();
+        emit errorOccurred(QString::fromStdString(e.what()));
+    }
+}
 
-        // 3. 连接服务器
-        qDebug() << "[MQTT] Connecting to:" << m_config.SERVER_ADDRESS.toStdString().c_str();
-        client.connect(connOpts)->wait();
-        qDebug() << "[MQTT] Connected successfully";
+void MQTTClient::publish(const QString &topic, const nlohmann::json &params, const QString &method, const QString &id, const QString &version)
+{
+    try
+    {
+        if (!m_client->is_connected())
+        {
+            connectToBroker();
+        }
 
-        // 4. 构造payload
         nlohmann::json payload;
         payload["id"] = id.toStdString();
         payload["version"] = version.toStdString();
         payload["params"] = params;
         payload["method"] = method.toStdString();
 
-        // 5. 创建消息并设置QoS
         auto pubmsg = mqtt::make_message(topic.toStdString(), payload.dump());
         pubmsg->set_qos(1);
 
-        // 6. 发布消息
-        client.publish(pubmsg)->wait_for(std::chrono::seconds(10));
-        qDebug() << "[MQTT] Message published to topic:" << topic.toStdString().c_str();
-
-        // 7. 断开连接
-        client.disconnect()->wait();
-        qDebug() << "[MQTT] Disconnected";
+        m_client->publish(pubmsg)->wait_for(std::chrono::seconds(10));
+        qDebug() << "[MQTT] Published to" << topic;
     }
-    catch (const mqtt::exception &exc)
+    catch (const mqtt::exception &e)
     {
-        QString errorMsg = QString("MQTT Error: %1").arg(exc.what());
-        qCritical() << errorMsg;
-        emit errorOccurred(errorMsg);
+        qCritical() << "[MQTT] Publish error:" << e.what();
+        emit errorOccurred(QString::fromStdString(e.what()));
     }
+}
+
+void MQTTClient::subscribe(const QString &topic, int qos)
+{
+    try
+    {
+        m_client->subscribe(topic.toStdString(), qos)->wait();
+        m_subscribedTopics.emplace_back(topic, qos);
+        qDebug() << "[MQTT] Subscribed to" << topic;
+    }
+    catch (const mqtt::exception &e)
+    {
+        qCritical() << "[MQTT] Subscribe error:" << e.what();
+        emit errorOccurred(QString::fromStdString(e.what()));
+    }
+}
+
+void MQTTClient::unsubscribe(const QString &topic)
+{
+    try
+    {
+        m_client->unsubscribe(topic.toStdString())->wait();
+        auto it = std::remove_if(m_subscribedTopics.begin(), m_subscribedTopics.end(),
+                                 [&topic](const auto &sub)
+                                 { return sub.first == topic; });
+        m_subscribedTopics.erase(it, m_subscribedTopics.end());
+        qDebug() << "[MQTT] Unsubscribed from" << topic;
+    }
+    catch (const mqtt::exception &e)
+    {
+        qCritical() << "[MQTT] Unsubscribe error:" << e.what();
+        emit errorOccurred(QString::fromStdString(e.what()));
+    }
+}
+
+void MQTTClient::onConnected()
+{
+    for (const auto &sub : m_subscribedTopics)
+    {
+        try
+        {
+            m_client->subscribe(sub.first.toStdString(), sub.second)->wait();
+            qDebug() << "[MQTT] Resubscribed to" << sub.first;
+        }
+        catch (const mqtt::exception &e)
+        {
+            qCritical() << "[MQTT] Resubscribe error:" << e.what();
+            emit errorOccurred(QString::fromStdString(e.what()));
+        }
+    }
+}
+
+void MQTTClient::handleMessageArrived(mqtt::const_message_ptr msg)
+{
+    QString topic = QString::fromStdString(msg->get_topic());
+    if(topic != m_config.subTOPIC)
+    {
+        return;
+    }
+    QByteArray payload(msg->get_payload().data(), msg->get_payload().size());
+    QMetaObject::invokeMethod(this, "onMessageReceived", Qt::QueuedConnection,
+                              Q_ARG(QString, topic),
+                              Q_ARG(QByteArray, payload));
+}
+void MQTTClient::onMessageReceived(const QString &topic, const QByteArray &payload)
+{
+    emit messageReceived(topic, payload);
+}
+
+void MQTTClient::MQTTClientCallback::connected(const std::string &cause)
+{
+    Q_UNUSED(cause);
+    QMetaObject::invokeMethod(m_client, "onConnected", Qt::QueuedConnection);
+}
+
+void MQTTClient::MQTTClientCallback::connection_lost(const std::string &cause)
+{
+    Q_UNUSED(cause);
+    qWarning() << "[MQTT] Connection lost";
+}
+
+void MQTTClient::MQTTClientCallback::message_arrived(mqtt::const_message_ptr msg)
+{
+    m_client->handleMessageArrived(msg);
+}
+
+void MQTTClient::publishMovementParams(const QString &topic, const QString &method, const QString &id, int angle, int speed, int current, int mode, const QString &version)
+{
+    nlohmann::json params;
+    params["angle"]["value"] = angle;
+    params["speed"]["value"] = speed;
+    params["current"]["value"] = current;
+    params["mode"]["value"] = mode;
+    publish(topic, params, method, id, version);
 }

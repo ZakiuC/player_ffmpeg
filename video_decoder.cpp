@@ -6,8 +6,7 @@ extern "C"
 #include <libavutil/imgutils.h>
 }
 
-VideoDecoder::VideoDecoder(const AppConfig &cfg, QObject *parent)
-    : QThread(parent), m_config(cfg)
+VideoDecoder::VideoDecoder(const AppConfig &cfg, QObject *parent) :QThread(parent), m_config(cfg)
 {
     // 初始化 FFmpeg 网络模块，支持网络协议
     avformat_network_init();

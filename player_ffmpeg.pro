@@ -42,6 +42,8 @@ SOURCES += \
     main.cpp \
     mainwindow.cpp \
     mqtt_client.cpp \
+    operatingarea.cpp \
+    showwidget.cpp \
     video_decoder.cpp \
     videowidget.cpp
 
@@ -49,11 +51,15 @@ HEADERS += \
     config.h \
     mainwindow.h \
     mqtt_client.h \
+    operatingarea.h \
+    showwidget.h \
     video_decoder.h \
     videowidget.h
 
 FORMS += \
-    mainwindow.ui
+    mainwindow.ui \
+    operatingarea.ui \
+    showwidget.ui
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
