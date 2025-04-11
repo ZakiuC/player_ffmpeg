@@ -54,6 +54,11 @@ void MQTTClient::publish(const QString &topic, const nlohmann::json &params, con
 {
     try
     {
+        qDebug() << "[MQTT] id:" << id;
+        qDebug() << "[MQTT] version:" << version;
+        qDebug() << "[MQTT] params:" << QString::fromStdString(params.dump());
+        qDebug() << "[MQTT] method:" << method;
+
         if (!m_client->is_connected())
         {
             connectToBroker();
@@ -78,7 +83,7 @@ void MQTTClient::publish(const QString &topic, const nlohmann::json &params, con
     }
 }
 
-void MQTTClient::publishMovementParams(const QString &topic, const QString &method, const QString &id, int angle, int speed, int current, int mode, const QString &version)
+void MQTTClient::publishMovementParams(const QString &topic, const QString &method, const QString &id, int angle, float speed, int current, int mode, const QString &version)
 {
     nlohmann::json params;
     params["angle"]["value"] = angle;

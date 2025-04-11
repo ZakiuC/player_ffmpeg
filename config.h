@@ -18,6 +18,9 @@ struct AppConfig
     const QString PASSWORD = "fbe84b268f6a5ee565d4585768db801eb087f55fd703947f1ed6ad549bd31029";
     const QString TOPIC = "/sys/k1sbasnSsQz/test_aly/thing/event/property/post";
     const QString subTOPIC = "/k1sbasnSsQz/test_aly/user/ackcheck";
+
+    // can电机配置
+    const int MOTOR_CURRENT = 30;
 };
 
 #endif // CONFIG_H

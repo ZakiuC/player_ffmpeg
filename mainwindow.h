@@ -46,6 +46,8 @@ private:
     std::unique_ptr<VideoDecoder> m_decoder;  // 视频解码器
     VideoWidget *m_videoWidget;               // 视频显示控件
     std::unique_ptr<MQTTClient> m_mqttClient;   // MQTT 通信客户端
+
+    float m_canMotorspeedbuffer;
 };
 
 #endif // MAINWINDOW_H

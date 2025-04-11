@@ -27,7 +27,7 @@ public:
                  const QString &id = "123",
                  const QString &version = "1.0");
 
-    void publishMovementParams(const QString &topic, const QString &method, const QString &id, int angle, int speed, int current, int mode, const QString &version = "1.0");
+    void publishMovementParams(const QString &topic, const QString &method, const QString &id, int angle, float speed, int current, int mode, const QString &version = "1.0");
     void publishMqttMessage(const std::map<QString, nlohmann::json>& fieldValues, const QString &id);
 
     void subscribe(const QString &topic, int qos = 1);

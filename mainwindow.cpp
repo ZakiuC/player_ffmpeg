@@ -9,7 +9,8 @@ MainWindow::MainWindow(QWidget *parent)
       ui(new Ui::MainWindow),
       isPlaying(false),
       isDown(true),
-      isFanOpen(false)
+      isFanOpen(false),
+      m_canMotorspeedbuffer(0.f)
 {
     ui->setupUi(this);
 
@@ -83,14 +84,25 @@ void MainWindow::handleMessageReceived(const QString &topic, const QByteArray &p
             .arg(milliseconds, 3, 10, QChar('0'));
 
         qDebug() << "[MAINWINDOW] id:" << QString::fromStdString(id) << "已接收" << formattedTimestamp;
+
+        if (id == "006") {
+            toggleButtonState(isPlaying, ui->operatingArea->getPlay8StopButton(), "摄像头开", "摄像头关", "background-color: rgb(0,255,0);", "background-color: rgb(255,0,0);");
+        } else if (id == "003") {
+            toggleButtonState(isDown, ui->operatingArea->getUp8DownButton(), "毛刷降", "毛刷升", "background-color: rgb(140, 0, 255);", "background-color: rgb(2, 160, 229);");
+        } else if (id == "005") {
+            toggleButtonState(isFanOpen, ui->operatingArea->getFanCtrlButton(), "推进器开", "推进器关", "background-color: rgb(255, 238, 0);", "background-color: rgb(2, 195, 229);");
+        } else if (id == "002") {
+            m_canMotorspeedbuffer = data["params"]["speed2"]["value"];
+            qDebug() << "[MAINWINDOW] m_canMotorspeedbuffer 已接收：" << m_canMotorspeedbuffer;
+        }
     } else {
         qDebug() << "[MAINWINDOW] ack 不存在或者为 null";
+        return;
     }
 }
 
 void MainWindow::onPlay8StopClicked()
 {
-    toggleButtonState(isPlaying, ui->operatingArea->getPlay8StopButton(), "摄像头开", "摄像头关", "background-color: rgb(0,255,0);", "background-color: rgb(255,0,0);");
     std::map<QString, nlohmann::json> fields;
     fields["Camera_state"] = isPlaying ? 1 : 0;
 
@@ -102,7 +114,6 @@ void MainWindow::onPlay8StopClicked()
 
 void MainWindow::onUp8DownClicked()
 {
-    toggleButtonState(isDown, ui->operatingArea->getUp8DownButton(), "毛刷降", "毛刷升", "background-color: rgb(140, 0, 255);", "background-color: rgb(2, 160, 229);");
     std::map<QString, nlohmann::json> fields;
     fields["angle485"] = isDown ? 90 : -90;
     fields["type"]     = 1;
@@ -112,22 +123,42 @@ void MainWindow::onUp8DownClicked()
 
 void MainWindow::onForwardClicked()
 {
-    m_mqttClient->publishMovementParams(config.TOPIC, "thing.event.property.post", "001", 90, 10, 20, 1);
+    qDebug() << "[MAINWINDOW] Clicked [前进] button.";
+    m_canMotorspeedbuffer += 0.1f;
+    std::map<QString, nlohmann::json> fields;
+    fields["speed2"] = m_canMotorspeedbuffer;
+    fields["current"] = config.MOTOR_CURRENT;
+    fields["mode"] = 1;
+
+    m_mqttClient->publishMqttMessage(fields, "002");
 }
 
 void MainWindow::onBackwardClicked()
 {
-    m_mqttClient->publishMovementParams(config.TOPIC, "thing.event.property.post", "001", -90, 10, 20, 1);
+    qDebug() << "[MAINWINDOW] Clicked [后退] button.";
+    m_canMotorspeedbuffer -= 0.1f;
+    std::map<QString, nlohmann::json> fields;
+    fields["speed2"] = m_canMotorspeedbuffer;
+    fields["current"] = config.MOTOR_CURRENT;
+    fields["mode"] = 1;
+
+    m_mqttClient->publishMqttMessage(fields, "002");
 }
 
 void MainWindow::onStopMovingClicked()
 {
     qDebug() << "[MAINWINDOW] Clicked [停止] button.";
+    m_canMotorspeedbuffer = 0.0f;
+    std::map<QString, nlohmann::json> fields;
+    fields["speed2"] = m_canMotorspeedbuffer;
+    fields["current"] = config.MOTOR_CURRENT;
+    fields["mode"] = 1;
+
+    m_mqttClient->publishMqttMessage(fields, "002");
 }
 
 void MainWindow::onFanCtrlClicked()
 {
-    toggleButtonState(isFanOpen, ui->operatingArea->getFanCtrlButton(), "推进器开", "推进器关", "background-color: rgb(255, 238, 0);", "background-color: rgb(2, 195, 229);");
     std::map<QString, nlohmann::json> fields;
     fields["duty"] = isFanOpen ? 5.3f : 0.01f;
 
