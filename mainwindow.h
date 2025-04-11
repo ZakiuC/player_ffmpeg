@@ -36,6 +36,14 @@ private slots:
     void onOpenSelectedClicked();
     void onCloseSelectedClicked();
     void onOpen8CloseClicked();
+    void onCheckBox1changed();
+    void onCheckBox2changed();
+    void onCheckBox3changed();
+    void onCheckBox4changed();
+    void onCheckBox5changed();
+    void onCheckBox6changed();
+    void onCheckBox7changed();
+    void onCheckBox8changed();
 
 private:
     Ui::MainWindow *ui;
@@ -43,6 +51,8 @@ private:
     bool isPlaying;             // 视频播放状态
     bool isDown;                // 毛刷位置状态
     bool isFanOpen;             // 推进器开关状态
+    uint8_t lh08;
+    uint8_t lh08_buffer;
     std::unique_ptr<VideoDecoder> m_decoder;  // 视频解码器
     VideoWidget *m_videoWidget;               // 视频显示控件
     std::unique_ptr<MQTTClient> m_mqttClient;   // MQTT 通信客户端

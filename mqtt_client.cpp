@@ -54,10 +54,10 @@ void MQTTClient::publish(const QString &topic, const nlohmann::json &params, con
 {
     try
     {
-        qDebug() << "[MQTT] id:" << id;
-        qDebug() << "[MQTT] version:" << version;
-        qDebug() << "[MQTT] params:" << QString::fromStdString(params.dump());
-        qDebug() << "[MQTT] method:" << method;
+//        qDebug() << "[MQTT] id:" << id;
+//        qDebug() << "[MQTT] version:" << version;
+//        qDebug() << "[MQTT] params:" << QString::fromStdString(params.dump());
+//        qDebug() << "[MQTT] method:" << method;
 
         if (!m_client->is_connected())
         {

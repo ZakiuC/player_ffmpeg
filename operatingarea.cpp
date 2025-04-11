@@ -62,3 +62,43 @@ QPushButton* OperatingArea::getOpen8CloseButton() const
 {
     return ui->open8closeBtn;
 }
+
+QCheckBox* OperatingArea::getCheckBox1() const
+{
+    return ui->ch1;
+}
+
+QCheckBox* OperatingArea::getCheckBox2() const
+{
+    return ui->ch2;
+}
+
+QCheckBox* OperatingArea::getCheckBox3() const
+{
+    return ui->ch3;
+}
+
+QCheckBox* OperatingArea::getCheckBox4() const
+{
+    return ui->ch4;
+}
+
+QCheckBox* OperatingArea::getCheckBox5() const
+{
+    return ui->ch5;
+}
+
+QCheckBox* OperatingArea::getCheckBox6() const
+{
+    return ui->ch6;
+}
+
+QCheckBox* OperatingArea::getCheckBox7() const
+{
+    return ui->ch7;
+}
+
+QCheckBox* OperatingArea::getCheckBox8() const
+{
+    return ui->ch8;
+}

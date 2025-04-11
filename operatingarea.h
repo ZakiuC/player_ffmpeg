@@ -3,6 +3,7 @@
 
 #include <QWidget>
 #include <QPushButton>
+#include <QCheckBox>
 
 namespace Ui {
 class OperatingArea;
@@ -26,6 +27,14 @@ public:
     QPushButton* getOpenSelectedButton() const;
     QPushButton* getCloseSelectedButton() const;
     QPushButton* getOpen8CloseButton() const;
+    QCheckBox* getCheckBox1() const;
+    QCheckBox* getCheckBox2() const;
+    QCheckBox* getCheckBox3() const;
+    QCheckBox* getCheckBox4() const;
+    QCheckBox* getCheckBox5() const;
+    QCheckBox* getCheckBox6() const;
+    QCheckBox* getCheckBox7() const;
+    QCheckBox* getCheckBox8() const;
 
 private:
     Ui::OperatingArea *ui;
