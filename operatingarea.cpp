@@ -13,8 +13,6 @@ OperatingArea::~OperatingArea()
     delete ui;
 }
 
-
-
 QPushButton* OperatingArea::getPlay8StopButton() const
 {
     return ui->play8stopBtn;

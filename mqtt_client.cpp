@@ -5,8 +5,10 @@
 #include <QMetaObject>
 
 MQTTClient::MQTTClient(const AppConfig &cfg, QObject *parent)
-    : QObject(parent), m_config(cfg), m_client(new mqtt::async_client(m_config.SERVER_ADDRESS.toStdString(), m_config.CLIENT_ID.toStdString())),
-      m_callback(new MQTTClientCallback(this))
+    : QObject(parent),
+      m_config(cfg),
+      m_client(std::make_unique<mqtt::async_client>(m_config.SERVER_ADDRESS.toStdString(), m_config.CLIENT_ID.toStdString())),
+      m_callback(std::make_unique<MQTTClientCallback>(this))
 {
     m_client->set_callback(*m_callback);
 
@@ -27,8 +29,6 @@ MQTTClient::~MQTTClient()
         {
             m_client->disconnect()->wait();
         }
-        delete m_client;
-        delete m_callback;
     }
     catch (const mqtt::exception &e)
     {
@@ -78,6 +78,16 @@ void MQTTClient::publish(const QString &topic, const nlohmann::json &params, con
     }
 }
 
+void MQTTClient::publishMovementParams(const QString &topic, const QString &method, const QString &id, int angle, int speed, int current, int mode, const QString &version)
+{
+    nlohmann::json params;
+    params["angle"]["value"] = angle;
+    params["speed"]["value"] = speed;
+    params["current"]["value"] = current;
+    params["mode"]["value"] = mode;
+    publish(topic, params, method, id, version);
+}
+
 void MQTTClient::subscribe(const QString &topic, int qos)
 {
     try
@@ -99,8 +109,7 @@ void MQTTClient::unsubscribe(const QString &topic)
     {
         m_client->unsubscribe(topic.toStdString())->wait();
         auto it = std::remove_if(m_subscribedTopics.begin(), m_subscribedTopics.end(),
-                                 [&topic](const auto &sub)
-                                 { return sub.first == topic; });
+                                 [&topic](const auto &sub){ return sub.first == topic; });
         m_subscribedTopics.erase(it, m_subscribedTopics.end());
         qDebug() << "[MQTT] Unsubscribed from" << topic;
     }
@@ -140,11 +149,13 @@ void MQTTClient::handleMessageArrived(mqtt::const_message_ptr msg)
                               Q_ARG(QString, topic),
                               Q_ARG(QByteArray, payload));
 }
+
 void MQTTClient::onMessageReceived(const QString &topic, const QByteArray &payload)
 {
     emit messageReceived(topic, payload);
 }
 
+// MQTTClientCallback 的实现
 void MQTTClient::MQTTClientCallback::connected(const std::string &cause)
 {
     Q_UNUSED(cause);
@@ -162,12 +173,12 @@ void MQTTClient::MQTTClientCallback::message_arrived(mqtt::const_message_ptr msg
     m_client->handleMessageArrived(msg);
 }
 
-void MQTTClient::publishMovementParams(const QString &topic, const QString &method, const QString &id, int angle, int speed, int current, int mode, const QString &version)
+void MQTTClient::publishMqttMessage(const std::map<QString, nlohmann::json>& fieldValues, const QString &id)
 {
     nlohmann::json params;
-    params["angle"]["value"] = angle;
-    params["speed"]["value"] = speed;
-    params["current"]["value"] = current;
-    params["mode"]["value"] = mode;
-    publish(topic, params, method, id, version);
+    for (const auto &field : fieldValues) {
+        // field.first 为字段名称，field.second 为对应的值，存入 JSON 时放到 "value" 下
+        params[field.first.toStdString()]["value"] = field.second;
+    }
+    publish(m_config.TOPIC, params, "thing.event.property.post", id);
 }

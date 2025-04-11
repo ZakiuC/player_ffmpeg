@@ -27,8 +27,6 @@ public:
     QPushButton* getCloseSelectedButton() const;
     QPushButton* getOpen8CloseButton() const;
 
-private slots:
-
 private:
     Ui::OperatingArea *ui;
 };
