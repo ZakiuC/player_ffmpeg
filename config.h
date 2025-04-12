@@ -21,6 +21,7 @@ struct AppConfig
 
     // can电机配置
     const int MOTOR_CURRENT = 30;
+    const float SPEED_DELTA = 5.f;
 };
 
 #endif // CONFIG_H

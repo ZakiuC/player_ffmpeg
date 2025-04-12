@@ -112,6 +112,12 @@ color: rgb(0, 0, 0);</string>
        <property name="text">
         <string>打开选中</string>
        </property>
+       <property name="checkable">
+        <bool>false</bool>
+       </property>
+       <property name="checked">
+        <bool>false</bool>
+       </property>
       </widget>
      </item>
      <item row="2" column="0">

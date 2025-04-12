@@ -4,11 +4,14 @@
 #include <QDebug>
 #include <QMetaObject>
 
+
 MQTTClient::MQTTClient(const AppConfig &cfg, QObject *parent)
     : QObject(parent),
       m_config(cfg),
       m_client(std::make_unique<mqtt::async_client>(m_config.SERVER_ADDRESS.toStdString(), m_config.CLIENT_ID.toStdString())),
-      m_callback(std::make_unique<MQTTClientCallback>(this))
+      m_callback(std::make_unique<MQTTClientCallback>(this)),
+      maxPublishPerSecond(2),    // 每秒最多 2 条消息
+      timeWindowMs(1200)         // 时间窗口为 1200 毫秒
 {
     m_client->set_callback(*m_callback);
 
@@ -52,12 +55,31 @@ void MQTTClient::connectToBroker()
 
 void MQTTClient::publish(const QString &topic, const nlohmann::json &params, const QString &method, const QString &id, const QString &version)
 {
+    // 速率限制检查
+        {
+            QMutexLocker locker(&m_publishMutex);
+            QDateTime currentTime = QDateTime::currentDateTime();
+            // 移除时间窗口之外的时间戳
+            while (!m_publishTimestamps.isEmpty() &&
+                   m_publishTimestamps.head().msecsTo(currentTime) > timeWindowMs)
+            {
+                m_publishTimestamps.dequeue();
+            }
+            if (m_publishTimestamps.size() >= maxPublishPerSecond)
+            {
+                emit errorOccurred("[MQTT] 发布调用过于频繁，已达到速率限制。本次消息不予发布。", true);
+                return;
+            }
+            // 将当前调用时间记录到队列中
+            m_publishTimestamps.enqueue(currentTime);
+        }
+
     try
     {
-//        qDebug() << "[MQTT] id:" << id;
-//        qDebug() << "[MQTT] version:" << version;
-//        qDebug() << "[MQTT] params:" << QString::fromStdString(params.dump());
-//        qDebug() << "[MQTT] method:" << method;
+        qDebug() << "[MQTT] id:" << id;
+        qDebug() << "[MQTT] version:" << version;
+        qDebug() << "[MQTT] params:" << QString::fromStdString(params.dump());
+        qDebug() << "[MQTT] method:" << method;
 
         if (!m_client->is_connected())
         {
@@ -73,8 +95,10 @@ void MQTTClient::publish(const QString &topic, const nlohmann::json &params, con
         auto pubmsg = mqtt::make_message(topic.toStdString(), payload.dump());
         pubmsg->set_qos(1);
 
-        m_client->publish(pubmsg)->wait_for(std::chrono::seconds(10));
-        qDebug() << "[MQTT] Published to" << topic;
+        m_client->publish(pubmsg)->wait_for(std::chrono::milliseconds(500));
+
+        qDebug() << "[MQTT] Published to" << topic
+                 << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
     }
     catch (const mqtt::exception &e)
     {

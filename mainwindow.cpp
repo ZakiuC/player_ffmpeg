@@ -29,8 +29,22 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(m_decoder.get(), &VideoDecoder::frameReady, this, &MainWindow::updateVideoFrame);
     connect(m_decoder.get(), &VideoDecoder::errorOccurred, this, &MainWindow::handleError);
-    connect(m_mqttClient.get(), &MQTTClient::errorOccurred, this, [this](const QString &msg)
-            { QMessageBox::critical(this, "MQTT Error", msg); });
+    connect(m_mqttClient.get(), &MQTTClient::errorOccurred, this, [this](const QString &msg, bool maxPublishFlag)
+            {
+                if(maxPublishFlag)
+                {
+                    ui->operatingArea->getForwardButton()->setEnabled(true);
+                    ui->operatingArea->getBackwardButton()->setEnabled(true);
+                    ui->operatingArea->getStopMovingButton()->setEnabled(true);
+                    ui->operatingArea->getUp8DownButton()->setEnabled(true);
+                    ui->operatingArea->getPlay8StopButton()->setEnabled(true);
+                    ui->operatingArea->getFanCtrlButton()->setEnabled(true);
+                    ui->operatingArea->getOpenSelectedButton()->setEnabled(true);
+                    ui->operatingArea->getCloseSelectedButton()->setEnabled(true);
+                    ui->operatingArea->getOpen8CloseButton()->setEnabled(true);
+                }
+                QMessageBox::critical(this, "MQTT Error", msg);
+            });
     connect(m_mqttClient.get(), &MQTTClient::messageReceived, this, &MainWindow::handleMessageReceived);
 
     connectButtons();
@@ -113,6 +127,9 @@ void MainWindow::handleMessageReceived(const QString &topic, const QByteArray &p
                 lh08_buffer = std::stoi(lh08_r, nullptr, 16);
                 qDebug() << QString("[MAINWINDOW] lh08_buffer 已接收：0x%1")
                                 .arg(lh08_buffer, 2, 16, QChar('0'));
+                ui->operatingArea->getOpenSelectedButton()->setEnabled(true);
+                ui->operatingArea->getCloseSelectedButton()->setEnabled(true);
+                ui->operatingArea->getOpen8CloseButton()->setEnabled(true);
             }
             else if (id == "003")
             {
@@ -154,6 +171,9 @@ void MainWindow::handleMessageReceived(const QString &topic, const QByteArray &p
             {
                 m_canMotorspeedbuffer = data["params"]["speed2"]["value"];
                 qDebug() << "[MAINWINDOW] m_canMotorspeedbuffer 已接收：" << m_canMotorspeedbuffer;
+                ui->operatingArea->getForwardButton()->setEnabled(true);
+                ui->operatingArea->getBackwardButton()->setEnabled(true);
+                ui->operatingArea->getStopMovingButton()->setEnabled(true);
             }
         }
         else
@@ -170,6 +190,7 @@ void MainWindow::handleMessageReceived(const QString &topic, const QByteArray &p
 
 void MainWindow::onPlay8StopClicked()
 {
+    ui->operatingArea->getPlay8StopButton()->setEnabled(false);
     std::map<QString, nlohmann::json> fields;
     fields["Camera_state"] = !isPlaying ? 1 : 0;
 
@@ -181,17 +202,20 @@ void MainWindow::onPlay8StopClicked()
 
 void MainWindow::onUp8DownClicked()
 {
+    ui->operatingArea->getUp8DownButton()->setEnabled(false);
     std::map<QString, nlohmann::json> fields;
     fields["angle485"] = isDown ? 90 : -90;
     fields["type"] = 1;
 
     m_mqttClient->publishMqttMessage(fields, "003");
+
 }
 
 void MainWindow::onForwardClicked()
 {
+    ui->operatingArea->getForwardButton()->setEnabled(false);
     qDebug() << "[MAINWINDOW] Clicked [前进] button.";
-    m_canMotorspeedbuffer += 0.1f;
+    m_canMotorspeedbuffer += config.SPEED_DELTA;
     std::map<QString, nlohmann::json> fields;
     fields["speed2"] = m_canMotorspeedbuffer;
     fields["current"] = config.MOTOR_CURRENT;
@@ -202,8 +226,9 @@ void MainWindow::onForwardClicked()
 
 void MainWindow::onBackwardClicked()
 {
+    ui->operatingArea->getBackwardButton()->setEnabled(false);
     qDebug() << "[MAINWINDOW] Clicked [后退] button.";
-    m_canMotorspeedbuffer -= 0.1f;
+    m_canMotorspeedbuffer -= config.SPEED_DELTA;
     std::map<QString, nlohmann::json> fields;
     fields["speed2"] = m_canMotorspeedbuffer;
     fields["current"] = config.MOTOR_CURRENT;
@@ -214,6 +239,7 @@ void MainWindow::onBackwardClicked()
 
 void MainWindow::onStopMovingClicked()
 {
+    ui->operatingArea->getStopMovingButton()->setEnabled(false);
     qDebug() << "[MAINWINDOW] Clicked [停止] button.";
     m_canMotorspeedbuffer = 0.0f;
     std::map<QString, nlohmann::json> fields;
@@ -226,6 +252,7 @@ void MainWindow::onStopMovingClicked()
 
 void MainWindow::onFanCtrlClicked()
 {
+    ui->operatingArea->getFanCtrlButton()->setEnabled(false);
     std::map<QString, nlohmann::json> fields;
     fields["duty"] = !isFanOpen ? 5.3f : 0.01f;
 
@@ -239,25 +266,39 @@ void MainWindow::onGPSClicked()
 
 void MainWindow::onOpenSelectedClicked()
 {
+    ui->operatingArea->getOpenSelectedButton()->setEnabled(false);
+    qDebug() << "[MAINWINDOW] lh08:" << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0')
+                 << ", lh08_buffer:" << "0x" + QString::number(lh08_buffer, 16).toUpper().rightJustified(2, '0');
     std::map<QString, nlohmann::json> fields;
-    fields["status"] = lh08 | lh08_buffer;
-
+    char str[4];
+    sprintf(str, "%02x", (lh08 | lh08_buffer));
+    fields["status"] = str;
 
     m_mqttClient->publishMqttMessage(fields, "004");
 }
 
 void MainWindow::onCloseSelectedClicked()
 {
+    ui->operatingArea->getCloseSelectedButton()->setEnabled(false);
+    qDebug() << "[MAINWINDOW] lh08:" << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0')
+                 << ", lh08_buffer:" << "0x" + QString::number(lh08_buffer, 16).toUpper().rightJustified(2, '0');
     std::map<QString, nlohmann::json> fields;
-    fields["status"] = ~lh08 & lh08_buffer;
+    char str[4];
+    sprintf(str, "%02x", (~lh08 & lh08_buffer));
+    fields["status"] = str;
 
     m_mqttClient->publishMqttMessage(fields, "004");
 }
 
 void MainWindow::onOpen8CloseClicked()
 {
+    ui->operatingArea->getOpen8CloseButton()->setEnabled(false);
+    qDebug() << "[MAINWINDOW] lh08:" << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0')
+                 << ", lh08_buffer:" << "0x" + QString::number(lh08_buffer, 16).toUpper().rightJustified(2, '0');
     std::map<QString, nlohmann::json> fields;
-    fields["status"] = lh08;
+    char str[4];
+    sprintf(str, "%02x", (lh08));
+    fields["status"] = str;
 
     m_mqttClient->publishMqttMessage(fields, "004");
 }
@@ -276,46 +317,55 @@ void MainWindow::toggleButtonState(bool &state, QPushButton *btn, const QString 
         btn->setText(textOn);
         btn->setStyleSheet(styleOn);
     }
+    btn->setEnabled(true);
 }
 
 void MainWindow::onCheckBox1changed(){
     bool read_bit = ui->operatingArea->getCheckBox1()->isChecked();
-    lh08 = (lh08 & ~(1 << 1)) | ((uint8_t)read_bit << 1);
+    lh08 = (lh08 & ~(1 << 0)) | ((uint8_t)read_bit << 0);
+    qDebug() << "lh08 change -> " << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0');
 }
 
 void MainWindow::onCheckBox2changed(){
-    bool read_bit = ui->operatingArea->getCheckBox1()->isChecked();
-    lh08 = (lh08 & ~(1 << 2)) | ((uint8_t)read_bit << 2);
+    bool read_bit = ui->operatingArea->getCheckBox2()->isChecked();
+    lh08 = (lh08 & ~(1 << 1)) | ((uint8_t)read_bit << 1);
+    qDebug() << "lh08 change -> " << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0');
 }
 
 void MainWindow::onCheckBox3changed(){
-    bool read_bit = ui->operatingArea->getCheckBox1()->isChecked();
-    lh08 = (lh08 & ~(1 << 3)) | ((uint8_t)read_bit << 3);
+    bool read_bit = ui->operatingArea->getCheckBox3()->isChecked();
+    lh08 = (lh08 & ~(1 << 2)) | ((uint8_t)read_bit << 2);
+    qDebug() << "lh08 change -> " << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0');
 }
 
 void MainWindow::onCheckBox4changed(){
-    bool read_bit = ui->operatingArea->getCheckBox1()->isChecked();
-    lh08 = (lh08 & ~(1 << 4)) | ((uint8_t)read_bit << 4);
+    bool read_bit = ui->operatingArea->getCheckBox4()->isChecked();
+    lh08 = (lh08 & ~(1 << 3)) | ((uint8_t)read_bit << 3);
+    qDebug() << "lh08 change -> " << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0');
 }
 
 void MainWindow::onCheckBox5changed(){
-    bool read_bit = ui->operatingArea->getCheckBox1()->isChecked();
-    lh08 = (lh08 & ~(1 << 5)) | ((uint8_t)read_bit << 5);
+    bool read_bit = ui->operatingArea->getCheckBox5()->isChecked();
+    lh08 = (lh08 & ~(1 << 4)) | ((uint8_t)read_bit << 4);
+    qDebug() << "lh08 change -> " << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0');
 }
 
 void MainWindow::onCheckBox6changed(){
-    bool read_bit = ui->operatingArea->getCheckBox1()->isChecked();
-    lh08 = (lh08 & ~(1 << 6)) | ((uint8_t)read_bit << 6);
+    bool read_bit = ui->operatingArea->getCheckBox6()->isChecked();
+    lh08 = (lh08 & ~(1 << 5)) | ((uint8_t)read_bit << 5);
+    qDebug() << "lh08 change -> " << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0');
 }
 
 void MainWindow::onCheckBox7changed(){
-    bool read_bit = ui->operatingArea->getCheckBox1()->isChecked();
-    lh08 = (lh08 & ~(1 << 7)) | ((uint8_t)read_bit << 7);
+    bool read_bit = ui->operatingArea->getCheckBox7()->isChecked();
+    lh08 = (lh08 & ~(1 << 6)) | ((uint8_t)read_bit << 6);
+    qDebug() << "lh08 change -> " << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0');
 }
 
 void MainWindow::onCheckBox8changed(){
-    bool read_bit = ui->operatingArea->getCheckBox1()->isChecked();
-    lh08 = (lh08 & ~(1 << 8)) | ((uint8_t)read_bit << 8);
+    bool read_bit = ui->operatingArea->getCheckBox8()->isChecked();
+    lh08 = (lh08 & ~(1 << 7)) | ((uint8_t)read_bit << 7);
+    qDebug() << "lh08 change -> " << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0');
 }
 
 void MainWindow::connectButtons()

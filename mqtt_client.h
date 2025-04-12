@@ -10,6 +10,9 @@
 #include <memory>
 #include <vector>
 #include <utility>
+#include <QMutex>
+#include <QDateTime>
+#include <QQueue>
 
 /**
  * @brief MQTT通信类
@@ -34,7 +37,7 @@ public:
     void unsubscribe(const QString &topic);
 
 signals:
-    void errorOccurred(const QString &message);
+    void errorOccurred(const QString &message, bool maxPublish = false);
     void messageReceived(const QString &topic, const QByteArray &payload);
 
 private slots:
@@ -62,6 +65,10 @@ private:
     mqtt::connect_options m_connOpts;
     std::unique_ptr<MQTTClientCallback> m_callback;
     std::vector<std::pair<QString, int>> m_subscribedTopics;
+    QMutex m_publishMutex;         // 保护速率限制检查的互斥锁
+    QQueue<QDateTime> m_publishTimestamps;  // 存储每次 publish 的时间戳
+    int maxPublishPerSecond;         // 时间窗口内允许的最大发布数
+    int timeWindowMs;                // 时间窗口，单位为毫秒，例如 1000 表示 1 秒
 };
 
 #endif // MQTTCLIENT_H
