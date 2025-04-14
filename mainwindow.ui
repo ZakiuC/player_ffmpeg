@@ -14,7 +14,7 @@
    <string>MainWindow</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">background-color: rgb(255, 170, 255);</string>
+   <string notr="true"/>
   </property>
   <widget class="QWidget" name="centralwidget">
    <widget class="VideoWidget" name="videoArea" native="true">
@@ -46,7 +46,7 @@
      </rect>
     </property>
     <property name="styleSheet">
-     <string notr="true">background-color: rgb(255, 255, 255);</string>
+     <string notr="true"/>
     </property>
    </widget>
    <widget class="QWidget" name="showArea" native="true">
@@ -59,7 +59,33 @@
      </rect>
     </property>
     <property name="styleSheet">
-     <string notr="true">background-color: rgb(85, 170, 255);</string>
+     <string notr="true"/>
+    </property>
+    <widget class="QPushButton" name="devBtn">
+     <property name="geometry">
+      <rect>
+       <x>1180</x>
+       <y>0</y>
+       <width>80</width>
+       <height>26</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>dev</string>
+     </property>
+    </widget>
+   </widget>
+   <widget class="OperatingAreaFlick" name="operatingFlickArea" native="true">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>980</x>
+      <y>10</y>
+      <width>290</width>
+      <height>540</height>
+     </rect>
     </property>
    </widget>
   </widget>
@@ -86,6 +112,12 @@
    <class>OperatingArea</class>
    <extends>QWidget</extends>
    <header location="global">operatingarea.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>OperatingAreaFlick</class>
+   <extends>QWidget</extends>
+   <header location="global">operatingareaflick.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

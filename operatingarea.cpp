@@ -13,6 +13,11 @@ OperatingArea::~OperatingArea()
     delete ui;
 }
 
+QPushButton* OperatingArea::getSwitchMotorModeButton() const
+{
+    return ui->switchMotorModeBtn;
+}
+
 QPushButton* OperatingArea::getPlay8StopButton() const
 {
     return ui->play8stopBtn;

@@ -3,6 +3,14 @@
 
 #include <QString>
 
+#define  CLOSE_MQTT_ID      "000"
+#define  CAN_POS_ID         "001"
+#define  CAN_SPEED_ID       "002"
+#define  MODBUS_MOROTR_ID   "003"
+#define  LH08_ID            "004"
+#define  PWM_MOTOR_ID       "005"
+#define  CAMERA_ID          "006"
+
 /**
  * 配置结构体，存储应用程序的所有配置信息
  */
@@ -22,6 +30,14 @@ struct AppConfig
     // can电机配置
     const int MOTOR_CURRENT = 30;
     const float SPEED_DELTA = 5.f;
+    const float ANGLE_DELTA = 90.f;
+    const int ANGLE_SPEED = 10;
+
+    // 485
+    const double MOTOR485_1_DOWN_POS = -90;
+    const double MOTOR485_1_UP_POS = 90;
+    const double MOTOR485_2_DOWN_POS = -90;
+    const double MOTOR485_2_UP_POS = 90;
 };
 
 #endif // CONFIG_H

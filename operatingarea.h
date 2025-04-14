@@ -17,6 +17,7 @@ public:
     explicit OperatingArea(QWidget *parent = nullptr);
     ~OperatingArea();
 
+    QPushButton* getSwitchMotorModeButton() const;
     QPushButton* getPlay8StopButton() const;
     QPushButton* getUp8DownButton() const;
     QPushButton* getForwardButton() const;

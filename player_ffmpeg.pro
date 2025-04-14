@@ -42,7 +42,9 @@ SOURCES += \
     main.cpp \
     mainwindow.cpp \
     mqtt_client.cpp \
+    numberpaddialog.cpp \
     operatingarea.cpp \
+    operatingareaflick.cpp \
     showwidget.cpp \
     video_decoder.cpp \
     videowidget.cpp
@@ -51,14 +53,18 @@ HEADERS += \
     config.h \
     mainwindow.h \
     mqtt_client.h \
+    numberpaddialog.h \
     operatingarea.h \
+    operatingareaflick.h \
     showwidget.h \
     video_decoder.h \
     videowidget.h
 
 FORMS += \
     mainwindow.ui \
+    numberpaddialog.ui \
     operatingarea.ui \
+    operatingareaflick.ui \
     showwidget.ui
 
 # Default rules for deployment.
