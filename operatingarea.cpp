@@ -107,3 +107,11 @@ QCheckBox* OperatingArea::getCheckBox8() const
 {
     return ui->ch8;
 }
+
+QVector<QCheckBox*> OperatingArea::getCheckBoxes() const
+{
+    QVector<QCheckBox*> checkBoxes;
+    checkBoxes << ui->ch1 << ui->ch2 << ui->ch3 << ui->ch4
+               << ui->ch5 << ui->ch6 << ui->ch7 << ui->ch8;
+    return checkBoxes;
+}

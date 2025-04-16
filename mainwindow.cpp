@@ -3,6 +3,21 @@
 #include <QMessageBox>
 #include <QDebug>
 #include <nlohmann/json.hpp>
+#include <QtCore/QDateTime>
+
+// 常量定义统一管理
+namespace
+{
+    constexpr int LH08_BIT_COUNT = 8;
+    const QString TIMESTAMP_FORMAT = "yyyy-MM-dd HH:mm:ss.zzz";
+    const QMap<QString, QString> BUTTON_STYLES = {
+        {"green", "background-color: rgb(0,255,37);"},
+        {"red", "background-color: rgb(238,27,37);"},
+        {"purple", "background-color: rgb(140, 0, 255);"},
+        {"blue", "background-color: rgb(2, 160, 229);"},
+        {"yellow", "background-color: rgb(255, 238, 0);"},
+        {"cyan", "background-color: rgb(2, 195, 229);"}};
+}
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
@@ -18,50 +33,455 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
-    ui->operatingFlickArea->hide();
-    ui->operatingFlickArea->set_window(this);
-
-    // 初始化 MQTT 客户端和视频解码器（使用智能指针管理）
-    m_mqttClient = std::make_unique<MQTTClient>(config);
-    m_mqttClient->subscribe(config.subTOPIC, 1);
-
-    m_decoder = std::make_unique<VideoDecoder>(config);
-
-    // 获取 UI 中的视频显示控件
-    m_videoWidget = ui->videoArea;
-
-    setWindowTitle("RTMP Player");
-
-    connect(m_decoder.get(), &VideoDecoder::frameReady, this, &MainWindow::updateVideoFrame);
-    connect(m_decoder.get(), &VideoDecoder::errorOccurred, this, &MainWindow::handleError);
-    connect(m_mqttClient.get(), &MQTTClient::errorOccurred, this, [this](const QString &msg, bool maxPublishFlag)
-            {
-                if(maxPublishFlag)
-                {
-                    ui->operatingArea->getForwardButton()->setEnabled(true);
-                    ui->operatingArea->getBackwardButton()->setEnabled(true);
-                    ui->operatingArea->getStopMovingButton()->setEnabled(true);
-                    ui->operatingArea->getSwitchMotorModeButton()->setEnabled(true);
-                    ui->operatingArea->getUp8DownButton()->setEnabled(true);
-                    ui->operatingArea->getPlay8StopButton()->setEnabled(true);
-                    ui->operatingArea->getFanCtrlButton()->setEnabled(true);
-                    ui->operatingArea->getOpenSelectedButton()->setEnabled(true);
-                    ui->operatingArea->getCloseSelectedButton()->setEnabled(true);
-                    ui->operatingArea->getOpen8CloseButton()->setEnabled(true);
-                }
-                QMessageBox::critical(this, "MQTT Error", msg); });
-    connect(m_mqttClient.get(), &MQTTClient::messageReceived, this, &MainWindow::handleMessageReceived);
-
-    connectButtons();
+    initializeUI();
+    initializeMQTT();
+    initializeVideo();
+    setupConnections();
 }
 
 MainWindow::~MainWindow()
 {
+    delete ui;
+}
+
+void MainWindow::initializeUI()
+{
+    ui->operatingFlickArea->hide();
+    ui->operatingFlickArea->set_window(this);
+    setWindowTitle("监控");
+    m_videoWidget = ui->videoArea;
+}
+
+void MainWindow::initializeMQTT()
+{
+    m_mqttClient = std::make_unique<MQTTClient>(config);
+    m_mqttClient->subscribe(config.subTOPIC, 1);
+}
+
+void MainWindow::initializeVideo()
+{
+    m_decoder = std::make_unique<VideoDecoder>(config);
+}
+
+void MainWindow::setupConnections()
+{
+    connect(m_decoder.get(), &VideoDecoder::frameReady, this, &MainWindow::updateVideoFrame);
+    connect(m_decoder.get(), &VideoDecoder::errorOccurred, this, &MainWindow::handleError);
+
+    connect(m_mqttClient.get(), &MQTTClient::errorOccurred,
+            this, &MainWindow::handleMQTTError);
+
+    connect(m_mqttClient.get(), &MQTTClient::messageReceived,
+            this, &MainWindow::handleMessageReceived);
+
+    setupButtonConnections();
+    setupCheckBoxConnections();
+}
+
+void MainWindow::setupButtonConnections()
+{
+    connect(ui->operatingArea->getSwitchMotorModeButton(), &QPushButton::clicked, this, &MainWindow::onSwitchMotorModeClicked);
+    connect(ui->operatingArea->getPlay8StopButton(), &QPushButton::clicked, this, &MainWindow::onPlay8StopClicked);
+    connect(ui->operatingArea->getUp8DownButton(), &QPushButton::clicked, this, &MainWindow::onUp8DownClicked);
+    connect(ui->operatingArea->getForwardButton(), &QPushButton::clicked, this, &MainWindow::onForwardClicked);
+    connect(ui->operatingArea->getBackwardButton(), &QPushButton::clicked, this, &MainWindow::onBackwardClicked);
+    connect(ui->operatingArea->getStopMovingButton(), &QPushButton::clicked, this, &MainWindow::onStopMovingClicked);
+    connect(ui->operatingArea->getFanCtrlButton(), &QPushButton::clicked, this, &MainWindow::onFanCtrlClicked);
+    connect(ui->operatingArea->getGPSButton(), &QPushButton::clicked, this, &MainWindow::onGPSClicked);
+    connect(ui->operatingArea->getOpenSelectedButton(), &QPushButton::clicked, this, &MainWindow::onOpenSelectedClicked);
+    connect(ui->operatingArea->getCloseSelectedButton(), &QPushButton::clicked, this, &MainWindow::onCloseSelectedClicked);
+    connect(ui->operatingArea->getOpen8CloseButton(), &QPushButton::clicked, this, &MainWindow::onOpen8CloseClicked);
+}
+
+// 统一处理CheckBox连接
+void MainWindow::setupCheckBoxConnections()
+{
+    const QVector<QCheckBox *> checkBoxes = {
+        ui->operatingArea->getCheckBox1(),
+        ui->operatingArea->getCheckBox2(),
+        ui->operatingArea->getCheckBox3(),
+        ui->operatingArea->getCheckBox4(),
+        ui->operatingArea->getCheckBox5(),
+        ui->operatingArea->getCheckBox6(),
+        ui->operatingArea->getCheckBox7(),
+        ui->operatingArea->getCheckBox8(),
+    };
+
+    for (int i = 0; i < LH08_BIT_COUNT; ++i)
+    {
+        connect(checkBoxes[i], &QCheckBox::stateChanged,
+                this, [this, i](int state)
+                { handleCheckBoxChanged(i, state); });
+    }
+}
+
+// 统一处理CheckBox状态变化
+void MainWindow::handleCheckBoxChanged(int bitIndex, int state)
+{
+    const bool checked = (state == Qt::Checked);
+    lh08 = (lh08 & ~(1 << bitIndex)) | (checked << bitIndex);
+    updateCheckBoxStyle(ui->operatingArea->getCheckBoxes()[bitIndex], checked);
+    qDebug() << "lh08 changed: 0x" << QString::number(lh08, 16).toUpper().rightJustified(2, '0');
+}
+
+void MainWindow::updateCheckBoxStyle(QCheckBox *box, bool checked)
+{
+    box->setStyleSheet(QString("QCheckBox::indicator {   width: 100%;"
+                               "height: 100%;"
+                               "border: none;"
+                               "background: transparent;}"
+                               "QCheckBox {%1}")
+                           .arg(checked ? BUTTON_STYLES["green"] : BUTTON_STYLES["red"]));
+}
+
+// 消息处理逻辑重构
+void MainWindow::handleMessageReceived(const QString &topic, const QByteArray &payload)
+{
+    qDebug() << "[MAIN] Message received on" << topic;
+
+    try
+    {
+        const auto data = nlohmann::json::parse(payload.toStdString());
+        const std::string id = data.value("id", "");
+
+        if (id.empty())
+        {
+            qWarning() << "Invalid message: missing ID";
+            return;
+        }
+
+        const auto &ack = data.at("params").at("ack").at("value");
+        const auto timestamp = parseTimestamp(ack.get<std::string>());
+
+        qDebug() << QString("[%1] %2 received").arg(timestamp.toString(TIMESTAMP_FORMAT), QString::fromStdString(id));
+
+        // 使用策略模式处理不同消息类型
+        static const QHash<QString, std::function<void()>> handlers = {
+            {CAN_POS_ID, [&]
+             { handleCanPosMessage(data); }},
+            {CAN_SPEED_ID, [&]
+             { handleCanSpeedMessage(data); }},
+            {MODBUS_MOROTR_ID, [&]
+             { handleModbusMotorMessage(data); }},
+            {LH08_ID, [&]
+             { handleLH08Message(data); }},
+            {PWM_MOTOR_ID, [&]
+             { handlePwmMotorMessage(data); }},
+            {CAMERA_ID, [&]
+             { handleCameraMessage(data); }},
+        };
+
+        const QString qid = QString::fromStdString(id);
+        if (handlers.contains(qid))
+        {
+            handlers[qid]();
+        }
+        else
+        {
+            qWarning() << "Unhandled message type:" << qid;
+        }
+    }
+    catch (const nlohmann::json::exception &e)
+    {
+        qCritical() << "JSON error:" << e.what();
+    }
+    catch (const std::exception &e)
+    {
+        qCritical() << "Error processing message:" << e.what();
+    }
+}
+
+// 时间戳解析封装
+QDateTime MainWindow::parseTimestamp(const std::string &timestampStr) const
+{
+    const qint64 ms = std::stoll(timestampStr);
+    return QDateTime::fromMSecsSinceEpoch(ms, Qt::UTC);
+}
+
+// 各类型消息处理函数
+void MainWindow::handleCanPosMessage(const nlohmann::json &data)
+{
+    float angle = data["params"]["angle"]["value"];
+    int speed = data["params"]["speed"]["value"];
+    int cur_max = data["params"]["current"]["value"];
+    int mode = data["params"]["mode"]["value"];
+    qDebug() << "[MAINWINDOW] 已接收：\nangle: " << angle << "\nspeed: " << speed << "\ncur_max: " << cur_max << "\nmode: " << mode;
+
+    const auto buttons = {
+        ui->operatingArea->getForwardButton(),
+        ui->operatingArea->getBackwardButton(),
+        ui->operatingArea->getStopMovingButton(),
+        ui->operatingArea->getSwitchMotorModeButton()};
+    for (auto btn : buttons)
+    {
+        btn->setEnabled(true);
+    }
+}
+
+void MainWindow::handleCanSpeedMessage(const nlohmann::json &data)
+{
+    m_canMotorspeedbuffer = data["params"]["speed2"]["value"];
+    qDebug() << "[MAINWINDOW] m_canMotorspeedbuffer 已接收：" << m_canMotorspeedbuffer;
+
+    const auto buttons = {
+        ui->operatingArea->getForwardButton(),
+        ui->operatingArea->getBackwardButton(),
+        ui->operatingArea->getStopMovingButton(),
+        ui->operatingArea->getSwitchMotorModeButton()};
+
+    for (auto btn : buttons)
+    {
+        btn->setEnabled(true);
+    }
+}
+
+void MainWindow::handleModbusMotorMessage(const nlohmann::json &data)
+{
+    bool isDown_r = false;
+    if (data["params"]["angle485_1"]["value"] == config.MOTOR485_1_DOWN_POS && data["params"]["angle485_2"]["value"] == config.MOTOR485_2_DOWN_POS)
+    {
+        isDown_r = true;
+    }
+    else if (data["params"]["angle485_1"]["value"] == config.MOTOR485_1_UP_POS && data["params"]["angle485_2"]["value"] == config.MOTOR485_2_UP_POS)
+    {
+        isDown_r = false;
+    }
+    else
+    {
+        qDebug() << "[MAINWINDOW] MODBUS_MOROTR_ID ack is error!!!! ";
+        ui->operatingArea->getUp8DownButton()->setEnabled(true);
+        return;
+    }
+    if (isDown_r != isDown)
+    {
+        toggleButtonState(isDown,
+                          ui->operatingArea->getUp8DownButton(),
+                          "毛刷降",
+                          "毛刷升",
+                          BUTTON_STYLES["purple"],
+                          BUTTON_STYLES["blue"]);
+    }
+    else
+    {
+        qDebug() << "[MAINWINDOW] angle not change. isDown: " << isDown << "\t isDown_r: " << isDown_r;
+        ui->operatingArea->getUp8DownButton()->setEnabled(true);
+    }
+}
+
+void MainWindow::handleLH08Message(const nlohmann::json &data)
+{
+    lh08_buffer = std::stoi(data["params"]["status"]["value"].get<std::string>(), nullptr, 16);
+    qDebug() << "LH08 buffer updated: 0x" << QString::number(lh08_buffer, 16);
+
+    const auto buttons = {
+        ui->operatingArea->getOpenSelectedButton(),
+        ui->operatingArea->getCloseSelectedButton(),
+        ui->operatingArea->getOpen8CloseButton()};
+
+    for (auto btn : buttons)
+    {
+        btn->setEnabled(true);
+    }
+}
+
+void MainWindow::handlePwmMotorMessage(const nlohmann::json &data)
+{
+    bool isFanOpen_r = false;
+    if (data["params"]["duty"]["value"] > 5.2f)
+    {
+        isFanOpen_r = true;
+    }
+    else if (data["params"]["duty"]["value"] < 0.02f)
+    {
+        isFanOpen_r = false;
+    }
+    else
+    {
+        return;
+    }
+
+    if (isFanOpen_r != isFanOpen)
+    {
+        toggleButtonState(isFanOpen,
+                          ui->operatingArea->getFanCtrlButton(),
+                          "推进器开",
+                          "推进器关",
+                          BUTTON_STYLES["yellow"],
+                          BUTTON_STYLES["cyan"]);
+    }
+}
+
+void MainWindow::handleCameraMessage(const nlohmann::json &data)
+{
+    const bool isPlaying_r = data["params"]["Camera_state"]["value"] == 1;
+    if (isPlaying_r != isPlaying)
+    {
+        toggleButtonState(isPlaying,
+                          ui->operatingArea->getPlay8StopButton(),
+                          "摄像头开",
+                          "摄像头关",
+                          BUTTON_STYLES["green"],
+                          BUTTON_STYLES["red"]);
+    }
+}
+
+// 按钮状态切换
+void MainWindow::toggleButtonState(bool &state, QPushButton *btn,
+                                   const QString &textOn, const QString &textOff,
+                                   const QString &styleOn, const QString &styleOff)
+{
+    state = !state;
+    btn->setText(state ? textOff : textOn);
+    btn->setStyleSheet(state ? styleOff : styleOn);
+    btn->setEnabled(true);
+    qDebug() << "Button" << btn->text() << "toggled to" << (state ? "OFF" : "ON");
+}
+
+// 统一处理电机控制消息
+void MainWindow::sendMotorControl(float value, MotorControlType_e type)
+{
+    std::map<QString, nlohmann::json> fields;
+
+    switch (type)
+    {
+    case SpeedControl:
+        fields["speed2"] = value;
+        fields["current"] = config.MOTOR_CURRENT;
+        fields["mode"] = 1;
+        break;
+
+    case PositionControl:
+        fields["angle"] = value;
+        fields["current"] = config.MOTOR_CURRENT;
+        fields["speed"] = config.ANGLE_SPEED;
+        fields["mode"] = 1;
+        break;
+    }
+
+    m_mqttClient->publishMqttMessage(fields, type == SpeedControl ? CAN_SPEED_ID : CAN_POS_ID);
+}
+
+void MainWindow::onForwardClicked()
+{
+    ui->operatingArea->getForwardButton()->setEnabled(false);
+    ui->operatingArea->getSwitchMotorModeButton()->setEnabled(false);
+
+    const float value = m_motor_mode ? (m_canMotorspeedbuffer + config.SPEED_DELTA) : config.ANGLE_DELTA;
+
+    sendMotorControl(value, m_motor_mode ? SpeedControl : PositionControl);
+}
+
+void MainWindow::onBackwardClicked()
+{
+    ui->operatingArea->getBackwardButton()->setEnabled(false);
+    ui->operatingArea->getSwitchMotorModeButton()->setEnabled(false);
+
+    const float value = m_motor_mode ? (m_canMotorspeedbuffer - config.SPEED_DELTA) : -config.ANGLE_DELTA;
+
+    sendMotorControl(value, m_motor_mode ? SpeedControl : PositionControl);
+}
+
+void MainWindow::onStopMovingClicked()
+{
+    ui->operatingArea->getStopMovingButton()->setEnabled(false);
+    ui->operatingArea->getSwitchMotorModeButton()->setEnabled(false);
+
+    sendMotorControl(0, m_motor_mode ? SpeedControl : PositionControl);
+}
+
+void MainWindow::onFanCtrlClicked()
+{
+    ui->operatingArea->getFanCtrlButton()->setEnabled(false);
+    std::map<QString, nlohmann::json> fields;
+    fields["duty"] = !isFanOpen ? 5.3f : 0.01f;
+
+    m_mqttClient->publishMqttMessage(fields, PWM_MOTOR_ID);
+}
+
+void MainWindow::onGPSClicked()
+{
+    qDebug() << "[MAINWINDOW] Clicked [GPS] button.";
+}
+
+void MainWindow::onOpenSelectedClicked()
+{
+    ui->operatingArea->getOpenSelectedButton()->setEnabled(false);
+    qDebug() << "[MAINWINDOW] lh08:" << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0')
+             << ", lh08_buffer:" << "0x" + QString::number(lh08_buffer, 16).toUpper().rightJustified(2, '0');
+    std::map<QString, nlohmann::json> fields;
+    char str[4];
+    sprintf(str, "%02x", (lh08 | lh08_buffer));
+    fields["status"] = str;
+
+    m_mqttClient->publishMqttMessage(fields, LH08_ID);
+}
+
+void MainWindow::onCloseSelectedClicked()
+{
+    ui->operatingArea->getCloseSelectedButton()->setEnabled(false);
+    qDebug() << "[MAINWINDOW] lh08:" << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0')
+             << ", lh08_buffer:" << "0x" + QString::number(lh08_buffer, 16).toUpper().rightJustified(2, '0');
+    std::map<QString, nlohmann::json> fields;
+    char str[4];
+    sprintf(str, "%02x", (~lh08 & lh08_buffer));
+    fields["status"] = str;
+
+    m_mqttClient->publishMqttMessage(fields, LH08_ID);
+}
+
+void MainWindow::onOpen8CloseClicked()
+{
+    ui->operatingArea->getOpen8CloseButton()->setEnabled(false);
+    qDebug() << "[MAINWINDOW] lh08:" << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0')
+             << ", lh08_buffer:" << "0x" + QString::number(lh08_buffer, 16).toUpper().rightJustified(2, '0');
+    std::map<QString, nlohmann::json> fields;
+    char str[4];
+    sprintf(str, "%02x", (lh08));
+    fields["status"] = str;
+
+    m_mqttClient->publishMqttMessage(fields, LH08_ID);
+}
+
+// 设备切换按钮优化
+void MainWindow::on_devBtn_clicked()
+{
+    show_dev = !show_dev;
+    ui->operatingArea->setVisible(!show_dev);
+    ui->operatingFlickArea->setVisible(show_dev);
+}
+
+// 错误处理统一封装
+void MainWindow::handleError(const QString &message)
+{
+    QMessageBox::critical(this, "Error", message);
     if (m_decoder)
     {
         m_decoder->stop();
     }
-    delete ui;
+}
+
+void MainWindow::handleMQTTError(const QString &msg, bool maxPublishFlag)
+{
+    if (maxPublishFlag)
+    {
+        const auto buttons = {
+            ui->operatingArea->getForwardButton(),
+            ui->operatingArea->getBackwardButton(),
+            ui->operatingArea->getStopMovingButton(),
+            ui->operatingArea->getSwitchMotorModeButton(),
+            ui->operatingArea->getUp8DownButton(),
+            ui->operatingArea->getPlay8StopButton(),
+            ui->operatingArea->getFanCtrlButton(),
+            ui->operatingArea->getOpenSelectedButton(),
+            ui->operatingArea->getCloseSelectedButton(),
+            ui->operatingArea->getOpen8CloseButton()};
+
+        for (auto btn : buttons)
+        {
+            btn->setEnabled(true);
+        }
+    }
+    QMessageBox::critical(this, "MQTT Error", msg);
 }
 
 void MainWindow::updateVideoFrame(const QImage &frame)
@@ -69,10 +489,37 @@ void MainWindow::updateVideoFrame(const QImage &frame)
     m_videoWidget->setFrame(frame);
 }
 
-void MainWindow::handleError(const QString &message)
+void MainWindow::onSwitchMotorModeClicked()
 {
-    QMessageBox::critical(this, "Playback Error", message);
-    m_decoder->stop();
+    m_motor_mode = m_motor_mode ? 0 : 1;
+
+    QString btn1 = m_motor_mode ? "加速" : "前进";
+    QString btn2 = m_motor_mode ? "减速" : "后退";
+    ui->operatingArea->getForwardButton()->setText(btn1);
+    ui->operatingArea->getBackwardButton()->setText(btn2);
+}
+
+void MainWindow::onPlay8StopClicked()
+{
+    ui->operatingArea->getPlay8StopButton()->setEnabled(false);
+    std::map<QString, nlohmann::json> fields;
+    fields["Camera_state"] = !isPlaying ? 1 : 0;
+
+    m_mqttClient->publishMqttMessage(fields, CAMERA_ID);
+
+    // 启动视频解码线程
+    m_decoder->start();
+}
+
+void MainWindow::onUp8DownClicked()
+{
+    ui->operatingArea->getUp8DownButton()->setEnabled(false);
+    std::map<QString, nlohmann::json> fields;
+    fields["angle485_1"] = isDown ? config.MOTOR485_1_UP_POS : config.MOTOR485_1_DOWN_POS;
+    fields["angle485_2"] = isDown ? config.MOTOR485_2_UP_POS : config.MOTOR485_2_DOWN_POS;
+    fields["type"] = 1;
+
+    m_mqttClient->publishMqttMessage(fields, MODBUS_MOROTR_ID);
 }
 
 void MainWindow::handleInputsAccepted(const QStringList &inputs, dialog_type_e type)
@@ -139,440 +586,5 @@ void MainWindow::handleInputsAccepted(const QStringList &inputs, dialog_type_e t
 
     default:
         break;
-    }
-}
-
-void MainWindow::handleMessageReceived(const QString &topic, const QByteArray &payload)
-{
-    qDebug() << "[MAINWINDOW] Received message on" << topic;
-    nlohmann::json data = nlohmann::json::parse(payload.toStdString());
-    std::string id;
-    if (data.contains("id") && !data["id"].is_null())
-    {
-        id = data["id"].get<std::string>();
-    }
-    else
-    {
-        qDebug() << "[MAINWINDOW] id 不存在或者为 null";
-        return;
-    }
-    std::string timestampStr;
-    try
-    {
-        if (data.contains("params") &&
-            data["params"].contains("ack") &&
-            data["params"]["ack"].contains("value") &&
-            !data["params"]["ack"]["value"].is_null())
-        {
-            timestampStr = data["params"]["ack"]["value"].get<std::string>();
-            long long timestamp_ms = std::stoll(timestampStr);
-            time_t seconds = timestamp_ms / 1000;
-            int milliseconds = timestamp_ms % 1000;
-            std::tm *ptm = std::gmtime(&seconds);
-            char buffer[32] = {0};
-            std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", ptm);
-
-            QString formattedTimestamp = QString("时间戳为：%1.%2 UTC")
-                                             .arg(QString::fromUtf8(buffer))
-                                             .arg(milliseconds, 3, 10, QChar('0'));
-
-            qDebug() << "[MAINWINDOW] id:" << QString::fromStdString(id) << "已接收" << formattedTimestamp;
-
-            if (id == CAMERA_ID)
-            {
-                bool isPlaying_r = false;
-                if (data["params"]["Camera_state"]["value"] == 1)
-                {
-                    isPlaying_r = true;
-                }
-                else if (data["params"]["Camera_state"]["value"] != 0)
-                {
-                    return;
-                }
-                if (isPlaying_r != isPlaying)
-                {
-                    toggleButtonState(isPlaying, ui->operatingArea->getPlay8StopButton(), "摄像头开", "摄像头关", "background-color: rgb(0,255,0);", "background-color: rgb(255,0,0);");
-                }
-            }
-            else if (id == LH08_ID)
-            {
-                std::string lh08_r = data["params"]["status"]["value"];
-                lh08_buffer = std::stoi(lh08_r, nullptr, 16);
-                qDebug() << QString("[MAINWINDOW] lh08_buffer 已接收：0x%1")
-                                .arg(lh08_buffer, 2, 16, QChar('0'));
-                ui->operatingArea->getOpenSelectedButton()->setEnabled(true);
-                ui->operatingArea->getCloseSelectedButton()->setEnabled(true);
-                ui->operatingArea->getOpen8CloseButton()->setEnabled(true);
-            }
-            else if (id == MODBUS_MOROTR_ID)
-            {
-                bool isDown_r = false;
-                if (data["params"]["angle485_1"]["value"] == config.MOTOR485_1_DOWN_POS && data["params"]["angle485_2"]["value"] == config.MOTOR485_2_DOWN_POS)
-                {
-                    isDown_r = true;
-                }
-                else if (data["params"]["angle485_1"]["value"] == config.MOTOR485_1_UP_POS && data["params"]["angle485_2"]["value"] == config.MOTOR485_2_UP_POS)
-                {
-                    isDown_r = false;
-                }
-                else
-                {
-                    qDebug() << "[MAINWINDOW] MODBUS_MOROTR_ID ack is error!!!! ";
-                    ui->operatingArea->getUp8DownButton()->setEnabled(true);
-                    return;
-                }
-                if (isDown_r != isDown)
-                {
-                    toggleButtonState(isDown, ui->operatingArea->getUp8DownButton(), "毛刷降", "毛刷升", "background-color: rgb(140, 0, 255);", "background-color: rgb(2, 160, 229);");
-                }
-                else
-                {
-                    qDebug() << "[MAINWINDOW] angle not change. isDown: " << isDown << "\t isDown_r: " << isDown_r;
-                    ui->operatingArea->getUp8DownButton()->setEnabled(true);
-                }
-            }
-            else if (id == PWM_MOTOR_ID)
-            {
-                bool isFanOpen_r = false;
-                if (data["params"]["duty"]["value"] > 5.2f)
-                {
-                    isFanOpen_r = true;
-                }
-                else if (data["params"]["duty"]["value"] < 0.02f)
-                {
-                    isFanOpen_r = false;
-                }
-                else
-                {
-                    return;
-                }
-                if (isFanOpen_r != isFanOpen)
-                {
-                    toggleButtonState(isFanOpen, ui->operatingArea->getFanCtrlButton(), "推进器开", "推进器关", "background-color: rgb(255, 238, 0);", "background-color: rgb(2, 195, 229);");
-                }
-            }
-            else if (id == CAN_SPEED_ID)
-            {
-                m_canMotorspeedbuffer = data["params"]["speed2"]["value"];
-                qDebug() << "[MAINWINDOW] m_canMotorspeedbuffer 已接收：" << m_canMotorspeedbuffer;
-                ui->operatingArea->getForwardButton()->setEnabled(true);
-                ui->operatingArea->getBackwardButton()->setEnabled(true);
-                ui->operatingArea->getStopMovingButton()->setEnabled(true);
-                ui->operatingArea->getSwitchMotorModeButton()->setEnabled(true);
-            }
-            else if (id == CAN_POS_ID)
-            {
-                float angle = data["params"]["angle"]["value"];
-                int speed = data["params"]["speed"]["value"];
-                int cur_max = data["params"]["current"]["value"];
-                int mode = data["params"]["mode"]["value"];
-                qDebug() << "[MAINWINDOW] 已接收：\nangle: " << angle << "\nspeed: " << speed << "\ncur_max: " << cur_max << "\nmode: " << mode;
-                ui->operatingArea->getForwardButton()->setEnabled(true);
-                ui->operatingArea->getBackwardButton()->setEnabled(true);
-                ui->operatingArea->getStopMovingButton()->setEnabled(true);
-                ui->operatingArea->getSwitchMotorModeButton()->setEnabled(true);
-            }
-        }
-        else
-        {
-            qDebug() << "[MAINWINDOW] ack 不存在或者为 null";
-            return;
-        }
-    }
-    catch (const nlohmann::json::exception &e)
-    {
-        qDebug() << "[MAINWINDOW] 捕获到异常: " << e.what();
-    }
-}
-
-void MainWindow::onSwitchMotorModeClicked()
-{
-    m_motor_mode = m_motor_mode ? 0 : 1;
-
-    QString btn1 = m_motor_mode ? "加速" : "前进";
-    QString btn2 = m_motor_mode ? "减速" : "后退";
-    ui->operatingArea->getForwardButton()->setText(btn1);
-    ui->operatingArea->getBackwardButton()->setText(btn2);
-}
-
-void MainWindow::onPlay8StopClicked()
-{
-    ui->operatingArea->getPlay8StopButton()->setEnabled(false);
-    std::map<QString, nlohmann::json> fields;
-    fields["Camera_state"] = !isPlaying ? 1 : 0;
-
-    m_mqttClient->publishMqttMessage(fields, CAMERA_ID);
-
-    // 启动视频解码线程
-    m_decoder->start();
-}
-
-void MainWindow::onUp8DownClicked()
-{
-    ui->operatingArea->getUp8DownButton()->setEnabled(false);
-    std::map<QString, nlohmann::json> fields;
-    fields["angle485_1"] = isDown ? config.MOTOR485_1_UP_POS : config.MOTOR485_1_DOWN_POS;
-    fields["angle485_2"] = isDown ? config.MOTOR485_2_UP_POS : config.MOTOR485_2_DOWN_POS;
-    fields["type"] = 1;
-
-    m_mqttClient->publishMqttMessage(fields, MODBUS_MOROTR_ID);
-}
-
-void MainWindow::onForwardClicked()
-{
-    ui->operatingArea->getForwardButton()->setEnabled(false);
-    ui->operatingArea->getSwitchMotorModeButton()->setEnabled(false);
-    std::map<QString, nlohmann::json> fields;
-
-    if (m_motor_mode)
-    {
-        m_canMotorspeedbuffer += config.SPEED_DELTA;
-        fields["speed2"] = m_canMotorspeedbuffer;
-        fields["current"] = config.MOTOR_CURRENT;
-        fields["mode"] = 1;
-    }
-    else
-    {
-        fields["angle"] = config.ANGLE_DELTA;
-        fields["current"] = config.MOTOR_CURRENT;
-        fields["speed"] = config.ANGLE_SPEED;
-        fields["mode"] = 1;
-    }
-    qDebug() << "[MAINWINDOW] Clicked [" << ui->operatingArea->getForwardButton()->text() << "] button.";
-
-    m_mqttClient->publishMqttMessage(fields, m_motor_mode ? CAN_SPEED_ID : CAN_POS_ID);
-}
-
-void MainWindow::onBackwardClicked()
-{
-    ui->operatingArea->getBackwardButton()->setEnabled(false);
-    ui->operatingArea->getSwitchMotorModeButton()->setEnabled(false);
-    std::map<QString, nlohmann::json> fields;
-
-    if (m_motor_mode)
-    {
-        m_canMotorspeedbuffer -= config.SPEED_DELTA;
-        fields["speed2"] = m_canMotorspeedbuffer;
-        fields["current"] = config.MOTOR_CURRENT;
-        fields["mode"] = 1;
-    }
-    else
-    {
-        fields["angle"] = -config.ANGLE_DELTA;
-        fields["current"] = config.MOTOR_CURRENT;
-        fields["speed"] = config.ANGLE_SPEED;
-        fields["mode"] = 1;
-    }
-    qDebug() << "[MAINWINDOW] Clicked [" << ui->operatingArea->getBackwardButton()->text() << "] button.";
-
-    m_mqttClient->publishMqttMessage(fields, m_motor_mode ? CAN_SPEED_ID : CAN_POS_ID);
-}
-
-void MainWindow::onStopMovingClicked()
-{
-    ui->operatingArea->getStopMovingButton()->setEnabled(false);
-    ui->operatingArea->getSwitchMotorModeButton()->setEnabled(false);
-    qDebug() << "[MAINWINDOW] Clicked [停止] button.";
-    m_canMotorspeedbuffer = 0.0f;
-    std::map<QString, nlohmann::json> fields;
-    fields["speed2"] = m_canMotorspeedbuffer;
-    fields["current"] = config.MOTOR_CURRENT;
-    fields["mode"] = 1;
-
-    m_mqttClient->publishMqttMessage(fields, CAN_SPEED_ID);
-}
-
-void MainWindow::onFanCtrlClicked()
-{
-    ui->operatingArea->getFanCtrlButton()->setEnabled(false);
-    std::map<QString, nlohmann::json> fields;
-    fields["duty"] = !isFanOpen ? 5.3f : 0.01f;
-
-    m_mqttClient->publishMqttMessage(fields, PWM_MOTOR_ID);
-}
-
-void MainWindow::onGPSClicked()
-{
-    qDebug() << "[MAINWINDOW] Clicked [GPS] button.";
-}
-
-void MainWindow::onOpenSelectedClicked()
-{
-    ui->operatingArea->getOpenSelectedButton()->setEnabled(false);
-    qDebug() << "[MAINWINDOW] lh08:" << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0')
-             << ", lh08_buffer:" << "0x" + QString::number(lh08_buffer, 16).toUpper().rightJustified(2, '0');
-    std::map<QString, nlohmann::json> fields;
-    char str[4];
-    sprintf(str, "%02x", (lh08 | lh08_buffer));
-    fields["status"] = str;
-
-    m_mqttClient->publishMqttMessage(fields, LH08_ID);
-}
-
-void MainWindow::onCloseSelectedClicked()
-{
-    ui->operatingArea->getCloseSelectedButton()->setEnabled(false);
-    qDebug() << "[MAINWINDOW] lh08:" << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0')
-             << ", lh08_buffer:" << "0x" + QString::number(lh08_buffer, 16).toUpper().rightJustified(2, '0');
-    std::map<QString, nlohmann::json> fields;
-    char str[4];
-    sprintf(str, "%02x", (~lh08 & lh08_buffer));
-    fields["status"] = str;
-
-    m_mqttClient->publishMqttMessage(fields, LH08_ID);
-}
-
-void MainWindow::onOpen8CloseClicked()
-{
-    ui->operatingArea->getOpen8CloseButton()->setEnabled(false);
-    qDebug() << "[MAINWINDOW] lh08:" << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0')
-             << ", lh08_buffer:" << "0x" + QString::number(lh08_buffer, 16).toUpper().rightJustified(2, '0');
-    std::map<QString, nlohmann::json> fields;
-    char str[4];
-    sprintf(str, "%02x", (lh08));
-    fields["status"] = str;
-
-    m_mqttClient->publishMqttMessage(fields, LH08_ID);
-}
-
-void MainWindow::toggleButtonState(bool &state, QPushButton *btn, const QString &textOn, const QString &textOff, const QString &styleOn, const QString &styleOff)
-{
-    state = !state;
-    qDebug() << "[MAINWINDOW] Clicked [" << btn->text() << "] button.";
-    if (state)
-    {
-        btn->setText(textOff);
-        btn->setStyleSheet(styleOff);
-    }
-    else
-    {
-        btn->setText(textOn);
-        btn->setStyleSheet(styleOn);
-    }
-    btn->setEnabled(true);
-}
-
-void switchLh08Chl(QCheckBox *checkBox)
-{
-    if (checkBox->isChecked())
-    {
-        checkBox->setStyleSheet(
-            "QCheckBox::indicator {   width: 100%;"
-            "height: 100%;"
-            "border: none;"
-            "background: transparent;}"
-            "QCheckBox {background-color: rgb(0, 255, 37);"
-            "}");
-    }
-    else
-    {
-        checkBox->setStyleSheet(
-            "QCheckBox::indicator {   width: 100%;"
-            "height: 100%;"
-            "border: none;"
-            "background: transparent;}"
-            "QCheckBox {background-color: rgb(238, 27, 37);"
-            "}");
-    }
-}
-void MainWindow::onCheckBox1changed()
-{
-    bool read_bit = ui->operatingArea->getCheckBox1()->isChecked();
-    switchLh08Chl(ui->operatingArea->getCheckBox1());
-    lh08 = (lh08 & ~(1 << 0)) | ((uint8_t)read_bit << 0);
-    qDebug() << "lh08 change -> " << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0');
-}
-
-void MainWindow::onCheckBox2changed()
-{
-    bool read_bit = ui->operatingArea->getCheckBox2()->isChecked();
-    switchLh08Chl(ui->operatingArea->getCheckBox2());
-    lh08 = (lh08 & ~(1 << 1)) | ((uint8_t)read_bit << 1);
-    qDebug() << "lh08 change -> " << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0');
-}
-
-void MainWindow::onCheckBox3changed()
-{
-    bool read_bit = ui->operatingArea->getCheckBox3()->isChecked();
-    switchLh08Chl(ui->operatingArea->getCheckBox3());
-    lh08 = (lh08 & ~(1 << 2)) | ((uint8_t)read_bit << 2);
-    qDebug() << "lh08 change -> " << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0');
-}
-
-void MainWindow::onCheckBox4changed()
-{
-    bool read_bit = ui->operatingArea->getCheckBox4()->isChecked();
-    switchLh08Chl(ui->operatingArea->getCheckBox4());
-    lh08 = (lh08 & ~(1 << 3)) | ((uint8_t)read_bit << 3);
-    qDebug() << "lh08 change -> " << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0');
-}
-
-void MainWindow::onCheckBox5changed()
-{
-    bool read_bit = ui->operatingArea->getCheckBox5()->isChecked();
-    switchLh08Chl(ui->operatingArea->getCheckBox5());
-    lh08 = (lh08 & ~(1 << 4)) | ((uint8_t)read_bit << 4);
-    qDebug() << "lh08 change -> " << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0');
-}
-
-void MainWindow::onCheckBox6changed()
-{
-    bool read_bit = ui->operatingArea->getCheckBox6()->isChecked();
-    switchLh08Chl(ui->operatingArea->getCheckBox6());
-    lh08 = (lh08 & ~(1 << 5)) | ((uint8_t)read_bit << 5);
-    qDebug() << "lh08 change -> " << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0');
-}
-
-void MainWindow::onCheckBox7changed()
-{
-    bool read_bit = ui->operatingArea->getCheckBox7()->isChecked();
-    switchLh08Chl(ui->operatingArea->getCheckBox7());
-    lh08 = (lh08 & ~(1 << 6)) | ((uint8_t)read_bit << 6);
-    qDebug() << "lh08 change -> " << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0');
-}
-
-void MainWindow::onCheckBox8changed()
-{
-    bool read_bit = ui->operatingArea->getCheckBox8()->isChecked();
-    switchLh08Chl(ui->operatingArea->getCheckBox8());
-    lh08 = (lh08 & ~(1 << 7)) | ((uint8_t)read_bit << 7);
-    qDebug() << "lh08 change -> " << "0x" + QString::number(lh08, 16).toUpper().rightJustified(2, '0');
-}
-
-void MainWindow::connectButtons()
-{
-    connect(ui->operatingArea->getSwitchMotorModeButton(), &QPushButton::clicked, this, &MainWindow::onSwitchMotorModeClicked);
-    connect(ui->operatingArea->getPlay8StopButton(), &QPushButton::clicked, this, &MainWindow::onPlay8StopClicked);
-    connect(ui->operatingArea->getUp8DownButton(), &QPushButton::clicked, this, &MainWindow::onUp8DownClicked);
-    connect(ui->operatingArea->getForwardButton(), &QPushButton::clicked, this, &MainWindow::onForwardClicked);
-    connect(ui->operatingArea->getBackwardButton(), &QPushButton::clicked, this, &MainWindow::onBackwardClicked);
-    connect(ui->operatingArea->getStopMovingButton(), &QPushButton::clicked, this, &MainWindow::onStopMovingClicked);
-    connect(ui->operatingArea->getFanCtrlButton(), &QPushButton::clicked, this, &MainWindow::onFanCtrlClicked);
-    connect(ui->operatingArea->getGPSButton(), &QPushButton::clicked, this, &MainWindow::onGPSClicked);
-    connect(ui->operatingArea->getOpenSelectedButton(), &QPushButton::clicked, this, &MainWindow::onOpenSelectedClicked);
-    connect(ui->operatingArea->getCloseSelectedButton(), &QPushButton::clicked, this, &MainWindow::onCloseSelectedClicked);
-    connect(ui->operatingArea->getOpen8CloseButton(), &QPushButton::clicked, this, &MainWindow::onOpen8CloseClicked);
-
-    connect(ui->operatingArea->getCheckBox1(), &QCheckBox::stateChanged, this, &MainWindow::onCheckBox1changed);
-    connect(ui->operatingArea->getCheckBox2(), &QCheckBox::stateChanged, this, &MainWindow::onCheckBox2changed);
-    connect(ui->operatingArea->getCheckBox3(), &QCheckBox::stateChanged, this, &MainWindow::onCheckBox3changed);
-    connect(ui->operatingArea->getCheckBox4(), &QCheckBox::stateChanged, this, &MainWindow::onCheckBox4changed);
-    connect(ui->operatingArea->getCheckBox5(), &QCheckBox::stateChanged, this, &MainWindow::onCheckBox5changed);
-    connect(ui->operatingArea->getCheckBox6(), &QCheckBox::stateChanged, this, &MainWindow::onCheckBox6changed);
-    connect(ui->operatingArea->getCheckBox7(), &QCheckBox::stateChanged, this, &MainWindow::onCheckBox7changed);
-    connect(ui->operatingArea->getCheckBox8(), &QCheckBox::stateChanged, this, &MainWindow::onCheckBox8changed);
-}
-
-void MainWindow::on_devBtn_clicked()
-{
-    if(show_dev)
-    {
-        ui->operatingArea->show();
-        ui->operatingFlickArea->hide();
-        show_dev = false;
-    }else{
-        ui->operatingArea->hide();
-        ui->operatingFlickArea->show();
-        show_dev = true;
     }
 }

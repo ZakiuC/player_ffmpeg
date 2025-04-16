@@ -11,6 +11,12 @@
 #define  PWM_MOTOR_ID       "005"
 #define  CAMERA_ID          "006"
 
+typedef enum
+{
+    SpeedControl,
+    PositionControl
+} MotorControlType_e;
+
 /**
  * 配置结构体，存储应用程序的所有配置信息
  */

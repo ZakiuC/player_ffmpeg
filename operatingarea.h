@@ -36,6 +36,7 @@ public:
     QCheckBox* getCheckBox6() const;
     QCheckBox* getCheckBox7() const;
     QCheckBox* getCheckBox8() const;
+    QVector<QCheckBox*> getCheckBoxes() const;
 
 private:
     Ui::OperatingArea *ui;
